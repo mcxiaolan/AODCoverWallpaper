@@ -1,0 +1,95 @@
+name: Build APK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up JDK
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install 'platforms;android-34' 'build-tools;34.0.0'
+
+          mkdir -p tools/linux/build-tools-34.0.0
+          ln -sfn "$JAVA_HOME" tools/linux/jdk-17.0.21+9
+          ln -sfn "$ANDROID_HOME/build-tools/34.0.0" \
+            tools/linux/build-tools-34.0.0/android-14
+
+          mkdir -p tools/sdk/platforms/android-34
+          ln -sfn "$ANDROID_HOME/platforms/android-34/android.jar" \
+            tools/sdk/platforms/android-34/android.jar
+
+          curl --fail --location --retry 3 \
+            'https://repo.maven.apache.org/maven2/io/github/libxposed/api/102.0.0/api-102.0.0.aar' \
+            --output "$RUNNER_TEMP/libxposed-api.aar"
+          mkdir -p tools/libxposed-ext
+          unzip -p "$RUNNER_TEMP/libxposed-api.aar" classes.jar \
+            > tools/libxposed-ext/classes.jar
+
+      - name: Prepare signing key
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/aod-cover-wallpaper.jks"
+
+          if [[ -n "$ANDROID_KEYSTORE_BASE64" ]]; then
+            : "${ANDROID_KEYSTORE_PASSWORD:?Set ANDROID_KEYSTORE_PASSWORD}"
+            : "${ANDROID_KEY_PASSWORD:?Set ANDROID_KEY_PASSWORD}"
+            : "${ANDROID_KEY_ALIAS:?Set ANDROID_KEY_ALIAS}"
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+            {
+              echo "KEYSTORE_PATH=$keystore"
+              echo "KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
+              echo "KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+              echo "KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            } >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -noprompt \
+              -keystore "$keystore" \
+              -storepass android -keypass android \
+              -alias aodcoverwallpaper \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname 'CN=AODCoverWallpaper CI'
+            {
+              echo "KEYSTORE_PATH=$keystore"
+              echo 'KEYSTORE_PASSWORD=android'
+              echo 'KEY_PASSWORD=android'
+              echo 'KEY_ALIAS=aodcoverwallpaper'
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Build and verify APK
+        run: bash build.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: AODCoverWallpaper-${{ github.sha }}
+          path: build/AODCoverWallpaper.apk
+          if-no-files-found: error
+          retention-days: 14
