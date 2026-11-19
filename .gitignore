@@ -1,0 +1,19 @@
+# Local build output
+/build/
+/dist/
+
+# Device-specific artifacts and proprietary Samsung firmware packages
+/logs/
+/work/
+/SystemUI.apk
+/AlwaysOnDisplay_*.apk
+
+# Signing credentials
+/tools/keystore.jks
+/tools/*.jks
+/tools/*.keystore
+
+# Extracted local toolchains
+/tools/linux/
+/tools/jdk17/
+/tools/jadx/
