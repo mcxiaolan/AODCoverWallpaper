@@ -12,6 +12,7 @@ PLATFORM="$WS/tools/sdk/platforms/android-34/android.jar"
 XPOSE="$WS/tools/libxposed-ext/classes.jar"
 SRC="$WS/module/src/main"
 OUT="${OUT_DIR:-$WS/build}"
+KEYSTORE="${KEYSTORE_PATH:-$WS/tools/keystore.jks}"
 
 for tool in tar unzip; do
   command -v "$tool" >/dev/null || { echo "[ERROR] Required tool not found: $tool" >&2; exit 1; }
@@ -30,7 +31,7 @@ if [[ ! -x "$BT/aapt2" ]]; then
   chmod +x "$BT/aapt2" "$BT/d8" "$BT/zipalign" "$BT/apksigner"
 fi
 
-for path in "$PLATFORM" "$XPOSE" "$WS/tools/keystore.jks"; do
+for path in "$PLATFORM" "$XPOSE" "$KEYSTORE"; do
   [[ -f "$path" ]] || { echo "[ERROR] Required file not found: $path" >&2; exit 1; }
 done
 
@@ -74,7 +75,7 @@ cp "$OUT/base.apk" "$OUT/AODCoverWallpaper-unsigned.apk"
 
 echo "[6/6] sign and verify"
 "$BT/apksigner" sign \
-  --ks "${KEYSTORE_PATH:-$WS/tools/keystore.jks}" \
+  --ks "$KEYSTORE" \
   --ks-pass "pass:${KEYSTORE_PASSWORD:-android}" \
   --key-pass "pass:${KEY_PASSWORD:-android}" \
   --ks-key-alias "${KEY_ALIAS:-aodcoverwallpaper}" \

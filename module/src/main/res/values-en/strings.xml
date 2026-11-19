@@ -15,6 +15,15 @@
     <string name="title_status">Compatibility</string>
     <string name="title_device">Device</string>
     <string name="title_about">About</string>
+    <string name="title_wallpaper_options">Wallpaper</string>
+
+    <string name="keep_wallpaper_bright">Keep wallpaper undimmed</string>
+    <string name="keep_wallpaper_bright_desc">Disable the regular dimming overlay without disabling periodic dimming.</string>
+    <string name="periodic_dim">Periodic wallpaper blackout</string>
+    <string name="periodic_dim_desc">While the display is off, requests a roughly 2-second black overlay on only the cover AOD wallpaper at the selected interval. Turning the display on cancels the current countdown; after the next screen-off, a full interval starts again. The system controls AOD refresh, so the effect may be delayed or not visible. The clock and other content are not intentionally changed.</string>
+    <string name="dim_interval_title">Blackout interval (seconds)</string>
+    <string name="dim_interval_value">Wallpaper blackout every %1$d seconds</string>
+    <string name="dim_interval_error">Enter a value from 1 to 86400 seconds</string>
 
     <!-- Baseline status -->
     <string name="baseline_match">Baseline match</string>

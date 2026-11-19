@@ -4,12 +4,17 @@ import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.LocaleManager;
+import android.content.SharedPreferences;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.LocaleList;
 import android.text.TextUtils;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -18,6 +23,7 @@ import android.view.Window;
 import android.view.WindowInsetsController;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -26,9 +32,11 @@ import android.widget.Toast;
 
 import com.lantianya.aodcoverwallpaper.R;
 import com.lantianya.aodcoverwallpaper.compat.Compat;
+import com.lantianya.aodcoverwallpaper.settings.ModuleSettings;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * One UI 风格设置界面，使用原生 View，不依赖额外 UI 库。
@@ -42,6 +50,7 @@ public final class SettingsActivity extends Activity {
     private FrameLayout titleSlot;
     private TextView pageTitle;
     private boolean hasResumedOnce;
+    private SharedPreferences modulePreferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,6 +59,7 @@ public final class SettingsActivity extends Activity {
             return;
         }
         report = Compat.read(this);
+        modulePreferences = getSharedPreferences(ModuleSettings.PREFERENCES, MODE_PRIVATE);
         int scrollY = savedInstanceState == null ? dp(180)
                 : savedInstanceState.getInt(STATE_SCROLL_Y, dp(180));
         setContentView(build(scrollY));
@@ -167,6 +177,7 @@ public final class SettingsActivity extends Activity {
 
         int headerTravel = dp(180);
         root.addView(buildHeader(headerTravel));
+        root.addView(buildWallpaperSettingsCard());
         root.addView(buildStatusCard());
         root.addView(buildDeviceCard());
         root.addView(buildAboutCard());
@@ -401,6 +412,220 @@ public final class SettingsActivity extends Activity {
         hlp.topMargin = dp(12);
         card.addView(hint, hlp);
         return card;
+    }
+
+    private View buildWallpaperSettingsCard() {
+        LinearLayout card = card();
+        card.addView(sectionTitle(R.string.title_wallpaper_options));
+
+        addSettingsSwitch(card, R.string.keep_wallpaper_bright,
+                R.string.keep_wallpaper_bright_desc,
+                modulePreferences.getBoolean(ModuleSettings.KEY_KEEP_WALLPAPER_BRIGHT, false),
+                ModuleSettings.KEY_KEEP_WALLPAPER_BRIGHT);
+
+        int interval = modulePreferences.getInt(ModuleSettings.KEY_DIM_INTERVAL_SECONDS,
+                ModuleSettings.DEFAULT_INTERVAL_SECONDS);
+        TextView intervalSummary = new TextView(this);
+        intervalSummary.setText(getString(R.string.dim_interval_value, interval));
+        addSettingsSwitch(card, R.string.periodic_dim, R.string.periodic_dim_desc,
+                modulePreferences.getBoolean(ModuleSettings.KEY_PERIODIC_DIM, false),
+                ModuleSettings.KEY_PERIODIC_DIM, intervalSummary,
+                view -> showDimIntervalDialog(intervalSummary));
+        return card;
+    }
+
+    private void addSettingsSwitch(LinearLayout card, int titleRes, int descriptionRes,
+            boolean checked, String preferenceKey) {
+        addSettingsSwitch(card, titleRes, descriptionRes, checked, preferenceKey,
+                null, null);
+    }
+
+    private void addSettingsSwitch(LinearLayout card, int titleRes, int descriptionRes,
+            boolean checked, String preferenceKey, TextView additionalSummary,
+            View.OnClickListener moreOptionsClick) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        LinearLayout textColumn = new LinearLayout(this);
+        textColumn.setOrientation(LinearLayout.VERTICAL);
+        TextView title = new TextView(this);
+        title.setText(titleRes);
+        title.setTextAppearance(this, R.style.TextAppearance_M3_BodyLarge);
+        textColumn.addView(title, matchWrap());
+
+        TextView description = new TextView(this);
+        description.setText(descriptionRes);
+        description.setTextAppearance(this, R.style.TextAppearance_M3_BodyMedium);
+        LinearLayout.LayoutParams descriptionParams = matchWrap();
+        descriptionParams.topMargin = dp(2);
+        textColumn.addView(description, descriptionParams);
+        if (additionalSummary != null) {
+            additionalSummary.setTextAppearance(this, R.style.TextAppearance_M3_BodyMedium);
+            LinearLayout.LayoutParams summaryParams = matchWrap();
+            summaryParams.topMargin = dp(2);
+            textColumn.addView(additionalSummary, summaryParams);
+        }
+        if (moreOptionsClick != null) {
+            textColumn.setClickable(true);
+            textColumn.setFocusable(true);
+            textColumn.setBackgroundResource(R.drawable.bg_touch_ripple);
+            textColumn.setOnClickListener(moreOptionsClick);
+        }
+        row.addView(textColumn, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        if (moreOptionsClick != null) {
+            View divider = new View(this);
+            divider.setBackgroundColor(themeColor(android.R.attr.textColorSecondary));
+            divider.setAlpha(0.45f);
+            LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
+                    dp(1), dp(22));
+            dividerParams.setMargins(dp(12), 0, dp(12), 0);
+            row.addView(divider, dividerParams);
+        }
+
+        OneUiToggle toggle = new OneUiToggle(titleRes, checked);
+        toggle.setOnCheckedChangeListener(value ->
+                modulePreferences.edit().putBoolean(preferenceKey, value).apply());
+        LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(dp(56), dp(32));
+        toggleParams.setMargins(dp(4), dp(8), 0, dp(8));
+        row.addView(toggle, toggleParams);
+        if (moreOptionsClick == null) {
+            row.setClickable(true);
+            row.setFocusable(true);
+            row.setBackgroundResource(R.drawable.bg_touch_ripple);
+            row.setOnClickListener(view -> toggle.setChecked(!toggle.isChecked()));
+        }
+
+        LinearLayout.LayoutParams rowParams = matchWrap();
+        rowParams.topMargin = dp(8);
+        rowParams.bottomMargin = dp(8);
+        card.addView(row, rowParams);
+    }
+
+    private final class OneUiToggle extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF track = new RectF();
+        private final int labelRes;
+        private boolean checked;
+        private float thumbPosition;
+        private ValueAnimator animator;
+        private Consumer<Boolean> checkedChangeListener;
+
+        OneUiToggle(int labelRes, boolean checked) {
+            super(SettingsActivity.this);
+            this.labelRes = labelRes;
+            this.checked = checked;
+            this.thumbPosition = checked ? 1f : 0f;
+            setClickable(true);
+            setFocusable(true);
+            setOnClickListener(view -> setChecked(!this.checked));
+        }
+
+        boolean isChecked() {
+            return checked;
+        }
+
+        void setChecked(boolean value) {
+            if (checked == value) return;
+            checked = value;
+            if (animator != null) animator.cancel();
+            animator = ValueAnimator.ofFloat(thumbPosition, value ? 1f : 0f);
+            animator.setDuration(180L);
+            animator.setInterpolator(new DecelerateInterpolator());
+            animator.addUpdateListener(animation -> {
+                thumbPosition = (float) animation.getAnimatedValue();
+                invalidate();
+            });
+            animator.start();
+            sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_VIEW_CLICKED);
+            if (checkedChangeListener != null) checkedChangeListener.accept(value);
+        }
+
+        void setOnCheckedChangeListener(Consumer<Boolean> listener) {
+            checkedChangeListener = listener;
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float height = getHeight();
+            float inset = dp(1);
+            float radius = height / 2f;
+            track.set(inset, inset, getWidth() - inset, height - inset);
+            int selectedTrack = getColor(R.color.toggle_selected_track);
+            int unselectedFill = getColor(R.color.toggle_unselected_track);
+            int unselectedBorder = getColor(R.color.toggle_unselected_border);
+            int thumbColor = getColor(checked
+                    ? R.color.toggle_selected_thumb : R.color.toggle_unselected_thumb);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setStrokeWidth(dp(2));
+            paint.setColor(checked ? selectedTrack : unselectedFill);
+            canvas.drawRoundRect(track, radius, radius, paint);
+            if (!checked) {
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setColor(unselectedBorder);
+                canvas.drawRoundRect(track, radius, radius, paint);
+            }
+
+            float thumbRadius = dp(10);
+            float left = dp(16);
+            float right = getWidth() - dp(16);
+            float centerX = left + (right - left) * thumbPosition;
+            float centerY = height / 2f;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(thumbColor);
+            canvas.drawCircle(centerX, centerY, thumbRadius, paint);
+        }
+
+        @Override
+        public void onInitializeAccessibilityNodeInfo(
+                android.view.accessibility.AccessibilityNodeInfo info) {
+            super.onInitializeAccessibilityNodeInfo(info);
+            info.setClassName("android.widget.Switch");
+            info.setCheckable(true);
+            info.setChecked(checked);
+            info.setText(getString(labelRes));
+        }
+    }
+
+    private void showDimIntervalDialog(TextView intervalSummary) {
+        EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setSingleLine(true);
+        input.setText(String.valueOf(modulePreferences.getInt(
+                ModuleSettings.KEY_DIM_INTERVAL_SECONDS,
+                ModuleSettings.DEFAULT_INTERVAL_SECONDS)));
+        input.setSelection(input.length());
+        int horizontalPadding = dp(24);
+        input.setPadding(horizontalPadding, dp(8), horizontalPadding, dp(8));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.dim_interval_title)
+                .setView(input)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(view -> {
+                    int seconds;
+                    try {
+                        seconds = Integer.parseInt(input.getText().toString());
+                    } catch (NumberFormatException exception) {
+                        seconds = 0;
+                    }
+                    if (seconds < ModuleSettings.MIN_INTERVAL_SECONDS
+                            || seconds > ModuleSettings.MAX_INTERVAL_SECONDS) {
+                        input.setError(getString(R.string.dim_interval_error));
+                        return;
+                    }
+                    modulePreferences.edit()
+                            .putInt(ModuleSettings.KEY_DIM_INTERVAL_SECONDS, seconds).apply();
+                    intervalSummary.setText(getString(R.string.dim_interval_value, seconds));
+                    dialog.dismiss();
+                }));
+        dialog.show();
     }
 
     private View buildDeviceCard() {

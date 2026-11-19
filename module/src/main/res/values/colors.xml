@@ -3,6 +3,12 @@
     <color name="ui_background">#F7F7F7</color>
     <color name="ui_card">#FFFFFF</color>
     <color name="ui_accent">#0072DE</color>
+    <color name="ui_touch_ripple">#14000000</color>
+    <color name="toggle_selected_track">#55595E</color>
+    <color name="toggle_unselected_track">#D8DADD</color>
+    <color name="toggle_unselected_border">#777B80</color>
+    <color name="toggle_selected_thumb">#FFFFFF</color>
+    <color name="toggle_unselected_thumb">#888C91</color>
 
     <!-- 状态色 -->
     <color name="state_ok">#386A20</color>

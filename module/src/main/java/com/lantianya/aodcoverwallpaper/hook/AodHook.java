@@ -1,18 +1,37 @@
 package com.lantianya.aodcoverwallpaper.hook;
 
 import android.content.Context;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.WindowManager;
 
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.ref.WeakReference;
+import java.util.WeakHashMap;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
+import com.lantianya.aodcoverwallpaper.settings.ModuleSettings;
 
 /**
  * 让「在外屏上显示壁纸」在任意「何时显示」模式下都能开启并生效。
@@ -78,8 +97,17 @@ public final class AodHook extends XposedModule {
             "prefsShowCoverWallpaperSummaryTopMargin"};
 
     private final AtomicBoolean pluginHooked = new AtomicBoolean(false);
+    private final WeakHashMap<View, ScrimState> scrimStates = new WeakHashMap<>();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private volatile ModuleSettings.Options cachedSettings;
+    private volatile long settingsReadAt;
+    private volatile boolean screenOn = true;
 
     private volatile Context appContext;
+    private final Map<String, Runnable> alarmActions = new HashMap<>();
+    private BroadcastReceiver alarmReceiver;
+    private BroadcastReceiver screenOnReceiver;
+    private int nextAlarmId;
 
     @Override
     public void onModuleLoaded(XposedModuleInterface.ModuleLoadedParam param) {
@@ -325,7 +353,6 @@ public final class AodHook extends XposedModule {
     }
 
     // --------------------------------------------------------------- backdrop
-    /** AOD 把外屏容器涂黑，这里改透明，让壁纸透出来。 */
     /**
      * AOD 给外屏容器涂的黑底会盖住壁纸。
      *
@@ -348,12 +375,22 @@ public final class AodHook extends XposedModule {
                     && self instanceof View) {
                 View v = (View) self;
                 boolean match = isAodBackdrop(v);
-                log(4, TAG, "black bg on " + describeView(v)
-                        + " match=" + match
-                        + " enabled=" + isCoverWallpaperEnabled());
                 if (match && isCoverWallpaperEnabled()) {
-                    if (isFrontScrim(v) || isClockItemBackdrop(v)) {
+                    if (isFrontScrim(v)) {
+                        ScrimState state = scrimState(v);
+                        state.lastColor = (Integer) arg;
+                        ModuleSettings.Options options = moduleSettings();
+                        updateDimCycle(v, state, options);
+
+                        int color = scrimColor(state.lastColor, options);
+                        return chain.proceed(new Object[]{Integer.valueOf(color)});
+                    }
+                    if (isClockItemBackdrop(v)) {
                         int color = (Integer) arg;
+                        if (moduleSettings().keepWallpaperBright) {
+                            return chain.proceed(new Object[]{Integer.valueOf(
+                                    color & 0x00FFFFFF)});
+                        }
                         int alpha = color >>> 24;
                         if (alpha > MAX_FRONT_SCRIM_ALPHA) {
                             int dimmed = (MAX_FRONT_SCRIM_ALPHA << 24)
@@ -371,26 +408,322 @@ public final class AodHook extends XposedModule {
         }
     }
 
-    private static String describeView(View v) {
-        StringBuilder sb = new StringBuilder(v.getClass().getSimpleName());
-        Object tag = v.getTag();
-        if (tag instanceof String) {
-            sb.append("[tag=").append(tag).append(']');
-        }
-        int id = v.getId();
-        if (id != View.NO_ID) {
-            sb.append("[id=0x").append(Integer.toHexString(id)).append(']');
-        }
-        android.view.ViewParent p = v.getParent();
-        if (p instanceof View) {
-            Object pt = ((View) p).getTag();
-            sb.append("[parent=").append(((View) p).getClass().getSimpleName());
-            if (pt instanceof String) {
-                sb.append(" tag=").append(pt);
+    private ModuleSettings.Options moduleSettings() {
+        long now = android.os.SystemClock.elapsedRealtime();
+        ModuleSettings.Options options = cachedSettings;
+        if (options == null || now - settingsReadAt >= 2000L) {
+            synchronized (this) {
+                if (cachedSettings == null || now - settingsReadAt >= 2000L) {
+                    cachedSettings = ModuleSettings.read(resolveContext());
+                    settingsReadAt = now;
+                }
+                options = cachedSettings;
             }
-            sb.append(']');
         }
-        return sb.toString();
+        return options;
+    }
+
+    private static int scrimColor(int color, ModuleSettings.Options options) {
+        if (options.keepWallpaperBright) {
+            return color & 0x00FFFFFF;
+        }
+        int alpha = color >>> 24;
+        return alpha > MAX_FRONT_SCRIM_ALPHA
+                ? (MAX_FRONT_SCRIM_ALPHA << 24) | (color & 0x00FFFFFF) : color;
+    }
+
+    private ScrimState scrimState(View view) {
+        synchronized (scrimStates) {
+            ScrimState state = scrimStates.get(view);
+            if (state == null) {
+                state = new ScrimState();
+                scrimStates.put(view, state);
+            }
+            return state;
+        }
+    }
+
+    private void updateDimCycle(View view, ScrimState state,
+            ModuleSettings.Options options) {
+        boolean enabled = options.periodicDim && isCoverWallpaperEnabled();
+        long intervalMillis = options.dimIntervalSeconds * 1000L;
+        if (!enabled) {
+            stopDimCycle(view, state);
+            state.intervalMillis = 0;
+            return;
+        }
+        ensureScreenOnReceiver();
+        if (screenOn) {
+            stopDimCycle(view, state);
+            state.intervalMillis = 0;
+            return;
+        }
+        if (state.intervalMillis == intervalMillis
+                && (state.pending != null || state.alarmIntent != null)) {
+            return;
+        }
+        cancelDimAlarm(view, state);
+        if (state.pending != null) view.removeCallbacks(state.pending);
+        state.pending = null;
+        state.intervalMillis = intervalMillis;
+        scheduleDimCycle(view, state, intervalMillis);
+    }
+
+    private void scheduleDimCycle(View view, ScrimState state, long intervalMillis) {
+        WeakReference<View> viewReference = new WeakReference<>(view);
+        Runnable startDim = () -> {
+            state.pending = null;
+            View target = viewReference.get();
+            if (target == null || !target.isAttachedToWindow()) {
+                return;
+            }
+            ModuleSettings.Options options = moduleSettings();
+            if (!options.periodicDim || !isCoverWallpaperEnabled()) {
+                updateDimCycle(target, state, options);
+                return;
+            }
+            long currentInterval = options.dimIntervalSeconds * 1000L;
+            if (currentInterval != state.intervalMillis) {
+                updateDimCycle(target, state, options);
+                return;
+            }
+            if (screenOn) {
+                updateDimCycle(target, state, options);
+                return;
+            }
+
+            state.blackout = true;
+            applyWallpaperDim(target, state);
+            scheduleRestore(target, state, () -> {
+                state.pending = null;
+                View currentView = viewReference.get();
+                if (currentView == null || !currentView.isAttachedToWindow()) {
+                    state.blackout = false;
+                    restoreWallpaperDim(state);
+                    return;
+                }
+                state.blackout = false;
+                restoreWallpaperDim(state);
+                scheduleDimCycle(currentView, state, state.intervalMillis);
+            });
+        };
+        scheduleAlarm(view, state, intervalMillis, startDim);
+    }
+
+    private void scheduleAlarm(View view, ScrimState state, long delayMillis, Runnable action) {
+        Context context = resolveContext();
+        Object service = context == null ? null : context.getSystemService(Context.ALARM_SERVICE);
+        if (service instanceof AlarmManager) {
+            try {
+                ensureAlarmReceiver(context);
+                int alarmId = nextAlarmId++;
+                String key = Integer.toString(alarmId);
+                Intent intent = new Intent(context.getPackageName() + ".AOD_DIM")
+                        .setPackage(context.getPackageName())
+                        .putExtra("alarm_id", alarmId);
+                int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+                PendingIntent alarmIntent = PendingIntent.getBroadcast(context,
+                        alarmId, intent, flags);
+                Runnable dispatch = () -> {
+                    state.alarmIntent = null;
+                    state.alarmKey = null;
+                    action.run();
+                };
+                synchronized (alarmActions) {
+                    alarmActions.put(key, dispatch);
+                }
+                state.alarmIntent = alarmIntent;
+                state.alarmKey = key;
+                ((AlarmManager) service).setExactAndAllowWhileIdle(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        android.os.SystemClock.elapsedRealtime() + delayMillis,
+                        alarmIntent);
+                return;
+            } catch (Throwable error) {
+                cancelDimAlarm(view, state);
+                log(5, TAG, "allow-while-idle alarm unavailable: "
+                        + error.getClass().getSimpleName());
+            }
+        }
+        state.pending = action;
+        view.postDelayed(action, delayMillis);
+    }
+
+    private void ensureAlarmReceiver(Context context) {
+        if (alarmReceiver != null) return;
+        alarmReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context receiverContext, Intent intent) {
+                String key = Integer.toString(intent.getIntExtra("alarm_id", -1));
+                Runnable action;
+                synchronized (alarmActions) {
+                    action = alarmActions.remove(key);
+                }
+                if (action != null) action.run();
+            }
+        };
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(context.getPackageName() + ".AOD_DIM");
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(alarmReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            context.registerReceiver(alarmReceiver, filter);
+        }
+    }
+
+    private void ensureScreenOnReceiver() {
+        if (screenOnReceiver != null) return;
+        Context context = resolveContext();
+        if (context == null) return;
+        Object service = context.getSystemService(Context.POWER_SERVICE);
+        if (service instanceof PowerManager) {
+            screenOn = ((PowerManager) service).isInteractive();
+        }
+        screenOnReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context receiverContext, Intent intent) {
+                handleScreenState(Intent.ACTION_SCREEN_ON.equals(intent.getAction()));
+            }
+        };
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                context.registerReceiver(screenOnReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                context.registerReceiver(screenOnReceiver, filter);
+            }
+        } catch (Throwable error) {
+            screenOnReceiver = null;
+            log(5, TAG, "screen-on restore unavailable: "
+                    + error.getClass().getSimpleName());
+        }
+    }
+
+    private void handleScreenState(boolean isScreenOn) {
+        screenOn = isScreenOn;
+        synchronized (scrimStates) {
+            for (Map.Entry<View, ScrimState> entry : scrimStates.entrySet()) {
+                View view = entry.getKey();
+                ScrimState state = entry.getValue();
+                if (isScreenOn) {
+                    stopDimCycle(view, state);
+                    state.intervalMillis = 0;
+                } else if (view != null) {
+                    updateDimCycle(view, state, moduleSettings());
+                }
+            }
+        }
+    }
+
+    private void stopDimCycle(View view, ScrimState state) {
+        cancelDimAlarm(view, state);
+        if (state.pending != null) {
+            mainHandler.removeCallbacks(state.pending);
+            view.removeCallbacks(state.pending);
+            state.pending = null;
+        }
+        if (state.wakeLock != null) {
+            if (state.wakeLock.isHeld()) state.wakeLock.release();
+            state.wakeLock = null;
+        }
+        if (state.blackout || state.wallpaperDimView != null) {
+            state.blackout = false;
+            restoreWallpaperDim(state);
+        }
+    }
+
+    private void scheduleRestore(View view, ScrimState state, Runnable action) {
+        Context context = resolveContext();
+        Object service = context == null ? null : context.getSystemService(Context.POWER_SERVICE);
+        if (service instanceof PowerManager) {
+            try {
+                PowerManager.WakeLock wakeLock = ((PowerManager) service).newWakeLock(
+                        PowerManager.PARTIAL_WAKE_LOCK, TAG + ":periodic-dim");
+                wakeLock.acquire(ModuleSettings.DIM_DURATION_MILLIS + 3000L);
+                state.wakeLock = wakeLock;
+                Runnable restore = () -> {
+                    state.pending = null;
+                    try {
+                        action.run();
+                    } finally {
+                        if (wakeLock.isHeld()) wakeLock.release();
+                        state.wakeLock = null;
+                    }
+                };
+                state.pending = restore;
+                mainHandler.postDelayed(restore, ModuleSettings.DIM_DURATION_MILLIS);
+                return;
+            } catch (Throwable error) {
+                log(5, TAG, "restore wake lock unavailable: "
+                        + error.getClass().getSimpleName());
+            }
+        }
+        state.pending = action;
+        view.postDelayed(action, ModuleSettings.DIM_DURATION_MILLIS);
+    }
+
+    private void applyWallpaperDim(View scrim, ScrimState state) {
+        ViewParent parent = scrim.getParent();
+        if (!(parent instanceof ViewGroup)) return;
+        ViewGroup host = (ViewGroup) parent;
+        if (host.getChildCount() == 0) return;
+        View wallpaperDimView = host.getChildAt(0);
+        if (wallpaperDimView == scrim) return;
+        if (state.wallpaperDimView != null) restoreWallpaperDim(state);
+        state.wallpaperDimView = wallpaperDimView;
+        ColorDrawable blackoutOverlay = new ColorDrawable(Color.BLACK);
+        blackoutOverlay.setBounds(0, 0, wallpaperDimView.getWidth(),
+                wallpaperDimView.getHeight());
+        state.wallpaperDimOverlay = blackoutOverlay;
+        wallpaperDimView.getOverlay().add(blackoutOverlay);
+        wallpaperDimView.invalidate();
+        host.invalidate();
+    }
+
+    private void restoreWallpaperDim(ScrimState state) {
+        View wallpaperDimView = state.wallpaperDimView;
+        if (wallpaperDimView == null) return;
+        Drawable blackoutOverlay = state.wallpaperDimOverlay;
+        if (blackoutOverlay != null) {
+            wallpaperDimView.getOverlay().remove(blackoutOverlay);
+        }
+        wallpaperDimView.invalidate();
+        ViewParent parent = wallpaperDimView.getParent();
+        if (parent instanceof View) ((View) parent).invalidate();
+        state.wallpaperDimView = null;
+        state.wallpaperDimOverlay = null;
+    }
+
+    private void cancelDimAlarm(View view, ScrimState state) {
+        if (state.alarmIntent != null) {
+            Context context = resolveContext();
+            Object service = context == null ? null : context.getSystemService(Context.ALARM_SERVICE);
+            if (service instanceof AlarmManager) {
+                ((AlarmManager) service).cancel(state.alarmIntent);
+            }
+            state.alarmIntent.cancel();
+            state.alarmIntent = null;
+            if (state.alarmKey != null) {
+                synchronized (alarmActions) {
+                    alarmActions.remove(state.alarmKey);
+                }
+                state.alarmKey = null;
+            }
+        }
+    }
+
+    private static final class ScrimState {
+        private int lastColor = Color.BLACK;
+        private long intervalMillis;
+        private boolean blackout;
+        private Runnable pending;
+        private PendingIntent alarmIntent;
+        private String alarmKey;
+        private PowerManager.WakeLock wakeLock;
+        private View wallpaperDimView;
+        private Drawable wallpaperDimOverlay;
     }
 
     private static final String TAG_OVERLAY_CONTAINER = "aod_overlay_container";

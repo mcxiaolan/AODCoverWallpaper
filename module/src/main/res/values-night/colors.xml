@@ -3,6 +3,12 @@
     <color name="ui_background">#000000</color>
     <color name="ui_card">#1C1D21</color>
     <color name="ui_accent">#3E91FF</color>
+    <color name="ui_touch_ripple">#24FFFFFF</color>
+    <color name="toggle_selected_track">#C5C8CC</color>
+    <color name="toggle_unselected_track">#292B2F</color>
+    <color name="toggle_unselected_border">#8B8F94</color>
+    <color name="toggle_selected_thumb">#242629</color>
+    <color name="toggle_unselected_thumb">#B9BDC2</color>
 
     <color name="state_ok">#B7F397</color>
     <color name="state_ok_container">#1E3A12</color>

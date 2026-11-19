@@ -15,6 +15,15 @@
     <string name="title_status">适配状态</string>
     <string name="title_device">设备信息</string>
     <string name="title_about">关于</string>
+    <string name="title_wallpaper_options">壁纸显示</string>
+
+    <string name="keep_wallpaper_bright">保持壁纸原亮度</string>
+    <string name="keep_wallpaper_bright_desc">关闭模块添加的常规压暗遮罩，不影响壁纸周期性变黑。</string>
+    <string name="periodic_dim">壁纸周期性短暂变黑</string>
+    <string name="periodic_dim_desc">仅息屏时按设定间隔请求将外屏 AOD 壁纸覆盖为黑色约 2 秒；亮屏会清除当前计时，重新息屏后从完整间隔开始计时。息屏画面刷新由系统控制，效果可能延迟显示或不可见；不会主动改变时钟等内容。</string>
+    <string name="dim_interval_title">变黑间隔（秒）</string>
+    <string name="dim_interval_value">壁纸每 %1$d 秒短暂变黑一次</string>
+    <string name="dim_interval_error">请输入 1 到 86400 之间的秒数</string>
 
     <!-- 基线状态 -->
     <string name="baseline_match">基线匹配</string>
