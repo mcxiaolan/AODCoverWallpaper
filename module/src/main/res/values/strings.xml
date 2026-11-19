@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用 -->
+    <string name="app_name">外屏 AOD 壁纸</string>
+    <string name="xposed_description">开启「息屏提醒」时，允许在任意模式开启「在外屏上显示壁纸」。</string>
+    <string name="app_subtitle">让「在外屏上显示壁纸」在任意「何时显示」模式下都可用</string>
+    <string name="restart_button">重启 SystemUI 和息屏提醒</string>
+    <string name="restart_title">确认重启系统界面</string>
+    <string name="restart_message">将请求超级用户权限，停止息屏提醒并重启 SystemUI。SystemUI 恢复后，息屏提醒会由系统重新启动。</string>
+    <string name="restart_waiting_root">等待超级用户授权…</string>
+    <string name="restart_success">重启命令已执行</string>
+    <string name="restart_failed">未能执行。请检查是否已授予超级用户权限。</string>
+
+    <!-- 页面标题与分区 -->
+    <string name="title_status">适配状态</string>
+    <string name="title_device">设备信息</string>
+    <string name="title_about">关于</string>
+
+    <!-- 基线状态 -->
+    <string name="baseline_match">基线匹配</string>
+    <string name="baseline_diff">环境不同</string>
+
+    <!-- 设备信息 -->
+    <string name="label_model">设备型号</string>
+    <string name="label_android">系统版本</string>
+    <string name="label_oneui">One UI 版本</string>
+    <string name="label_aod">息屏提醒版本</string>
+    <string name="label_cover">外屏支持</string>
+    <string name="value_yes">支持</string>
+    <string name="value_no">不支持</string>
+
+    <!-- 兼容性提示 -->
+    <string name="compat_baseline_ok">当前环境与验证基线一致，但这不代表模块已经生效。</string>
+    <string name="compat_baseline_diff">与开发验证基线存在差异，模块可能不适配：</string>
+    <string name="compat_dev_model">· 设备型号不是 %1$s</string>
+    <string name="compat_dev_sdk">· 系统 API 不是 %1$s</string>
+    <string name="compat_dev_oneui">· One UI 版本不是 %1$s</string>
+    <string name="compat_dev_aod">· 息屏提醒版本不是 %1$s</string>
+    <string name="compat_hint_generic">模块依赖三星「息屏提醒」内部的私有实现，不同系统版本上这些实现可能变化。若功能未生效，请反馈机型与版本。</string>
+
+    <!-- 关于 -->
+    <string name="about_version">模块版本 %1$s</string>
+    <string name="about_baseline">验证基线：%1$s / Android API %2$s / One UI %3$s / 息屏提醒 %4$s</string>
+    <string name="about_scope">作用范围：com.android.systemui、com.samsung.android.app.aodservice</string>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ui_background">#F7F7F7</color>
+    <color name="ui_card">#FFFFFF</color>
+    <color name="ui_accent">#0072DE</color>
+
+    <!-- 状态色 -->
+    <color name="state_ok">#386A20</color>
+    <color name="state_ok_container">#B7F397</color>
+    <color name="state_warn">#7D5260</color>
+    <color name="state_warn_container">#FFD8E4</color>
+    <color name="state_unknown_container">#E7E0EC</color>
+</resources>

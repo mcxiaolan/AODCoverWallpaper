@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      DayNight 父主题让系统自动切换深浅配色；
+      状态栏/导航栏的颜色与图标明暗由 SettingsActivity#applySystemBars 动态处理，
+      这里不要写死 windowLightStatusBar，否则深色模式下图标会看不见。
+    -->
+    <style name="Theme.AodCoverWallpaper" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:colorBackground">@color/ui_background</item>
+        <item name="android:windowBackground">@color/ui_background</item>
+        <item name="android:colorAccent">@color/ui_accent</item>
+    </style>
+
+    <style name="Theme.AodCoverWallpaper.Settings" parent="Theme.AodCoverWallpaper">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <!-- Group heading -->
+    <style name="TextAppearance.M3.SectionTitle" parent="@android:style/TextAppearance">
+        <item name="android:textSize">15sp</item>
+        <item name="android:textColor">?android:attr/colorAccent</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.02</item>
+    </style>
+
+    <!-- 行标题：bodyLarge -->
+    <style name="TextAppearance.M3.BodyLarge" parent="@android:style/TextAppearance">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">?android:attr/textColorPrimary</item>
+    </style>
+
+    <!-- 行说明：bodyMedium -->
+    <style name="TextAppearance.M3.BodyMedium" parent="@android:style/TextAppearance">
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">?android:attr/textColorSecondary</item>
+        <item name="android:lineSpacingExtra">3dp</item>
+    </style>
+
+    <!-- One UI large page title -->
+    <style name="TextAppearance.M3.Headline" parent="@android:style/TextAppearance">
+        <item name="android:textSize">32sp</item>
+        <item name="android:textColor">?android:attr/textColorPrimary</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">Cover AOD Wallpaper</string>
+    <string name="xposed_description">While Always On Display is on, allow enabling \"Show wallpaper on cover screen\" in any display mode.</string>
+    <string name="app_subtitle">Makes \"Show wallpaper on cover screen\" work in every \"When to show\" mode</string>
+    <string name="restart_button">Restart System UI and AOD</string>
+    <string name="restart_title">Restart system components?</string>
+    <string name="restart_message">The app will request superuser access, stop Always On Display, and restart System UI. AOD will be relaunched by the system afterward.</string>
+    <string name="restart_waiting_root">Waiting for superuser approval…</string>
+    <string name="restart_success">Restart command executed</string>
+    <string name="restart_failed">Command failed. Check superuser access and try again.</string>
+
+    <!-- Titles -->
+    <string name="title_status">Compatibility</string>
+    <string name="title_device">Device</string>
+    <string name="title_about">About</string>
+
+    <!-- Baseline status -->
+    <string name="baseline_match">Baseline match</string>
+    <string name="baseline_diff">Different environment</string>
+
+    <!-- Device info -->
+    <string name="label_model">Model</string>
+    <string name="label_android">Android version</string>
+    <string name="label_oneui">One UI version</string>
+    <string name="label_aod">Always On Display version</string>
+    <string name="label_cover">Cover display</string>
+    <string name="value_yes">Supported</string>
+    <string name="value_no">Not supported</string>
+
+    <!-- Compatibility hints -->
+    <string name="compat_baseline_ok">This device matches the verified baseline. This does not confirm the module is active.</string>
+    <string name="compat_baseline_diff">Differs from the verified baseline; the module may not work:</string>
+    <string name="compat_dev_model">· Model is not %1$s</string>
+    <string name="compat_dev_sdk">· Android API is not %1$s</string>
+    <string name="compat_dev_oneui">· One UI version is not %1$s</string>
+    <string name="compat_dev_aod">· Always On Display version is not %1$s</string>
+    <string name="compat_hint_generic">The module hooks private internals of Samsung Always On Display, which may change between releases. If it does not work, please report your model and versions.</string>
+
+    <!-- About -->
+    <string name="about_version">Module version %1$s</string>
+    <string name="about_baseline">Verified on: %1$s / Android API %2$s / One UI %3$s / AOD %4$s</string>
+    <string name="about_scope">Scope: com.android.systemui, com.samsung.android.app.aodservice</string>
+</resources>
